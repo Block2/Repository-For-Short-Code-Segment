@@ -1,0 +1,178 @@
+//将table_name表中的字段记录复制到target_table中。返回中转的Map对象。 
+/**
+     * Description: 根据表列定义,返回SQLMAP<br>
+     * 防止增删字段时修改代码
+     * 
+     * @param table_name
+     *            表名
+     * @param target_table
+     *            复制目标表名
+     * @param exclude
+     *            排除的字段
+     * @return SQLMAP
+     * @Date：2014-3-2
+     */
+    public static Map<String, Object> getSqlMap(String table_name, String target_table, Map data, List<String> exclude) {
+        Map<String, Object> sqlMap = new HashMap<String, Object>();
+        List<String> tcl = new ArrayList<String>();
+        if (target_table != null && !table_name.equalsIgnoreCase(target_table)) {
+            List tls = getTableCLName(target_table);
+            for (Iterator it = tls.iterator(); it.hasNext();) {
+                Map map = (Map) it.next();
+                tcl.add((String) map.get("COLUMN_NAME"));
+            }
+        }
+
+        List ls = getTableCLName(table_name);
+        for (Iterator it = ls.iterator(); it.hasNext();) {
+            Map map = (Map) it.next();
+            if ((exclude == null || !exclude.contains(map.get("COLUMN_NAME")))
+                    && (tcl.size() == 0 || tcl.contains(map.get("COLUMN_NAME")))) {
+                sqlMap.put((String) map.get("COLUMN_NAME"), data.get(map.get("COLUMN_NAME")));
+            }
+        }
+        return sqlMap;
+    }
+
+    /**
+     * Description: 获取表列名<br>
+     * 
+     * @param table_name
+     * @return
+     * @Date：2014-5-7
+     */
+    private static List getTableCLName(String table_name) {
+        StringBuffer sql = new StringBuffer();
+        // 从ORACLE数据字典查询,如果ORACLE设置权限不允许查询,改造为从指标体系源数据信息表中查
+        sql.append(" SELECT TC.COLUMN_NAME COLUMN_NAME");
+        sql.append("   FROM USER_TAB_COLUMNS TC ");
+        sql.append("  WHERE TC.TABLE_NAME = ? ");
+        List ls = null;
+        try {
+            ls = getJdbcTemplate().queryForList(sql.toString(), new Object[] { table_name.toUpperCase() });
+        } catch (DataAccessException e) {
+            e.printStackTrace();
+            sql.append(" SELECT BFI.FIELD_CODE COLUMN_NAME");
+            sql.append("   FROM YLS_BILL_FIELD_INFO BFI, YLS_BILL_TABLE_INFO BTI ");
+            sql.append("  WHERE BFI.PK_BILL_TABLE_INFO = BTI.PK_BILL_TABLE_INFO ");
+            sql.append("    AND BTI.TABLE_NAME = ? ");
+            ls = getJdbcTemplate().queryForList(sql.toString(), new Object[] { table_name.toUpperCase() });
+        }
+        if (ls == null) {
+            ls = new ArrayList();
+        }
+        return ls;
+    }
+
+
+/**
+     * 批量插入数据到数据库
+     * 
+     * @param tableName
+     * @throws Exception
+     * @author yuzhiyong
+     */
+    @SuppressWarnings("unchecked")
+    public void insertBatchTable(String tableName, final List params) {
+        if (params.isEmpty()) {
+            return;
+        }
+        Map keyMap = (Map) params.get(0);
+
+        final List keys = new ArrayList();
+
+        StringBuffer key = new StringBuffer();
+        StringBuffer value = new StringBuffer();
+
+        for (Iterator iter = keyMap.entrySet().iterator(); iter.hasNext();) {
+            Entry element = (Entry) iter.next();
+            key.append(element.getKey() + ",");
+            value.append("?,");
+            keys.add(element.getKey());
+        }
+        key.replace(key.length() - 1, key.length(), "");
+        value.replace(value.length() - 1, value.length(), "");
+
+        StringBuffer sql = new StringBuffer("insert into ");
+        sql.append(tableName);
+        sql.append("(").append(key).append(")");
+        sql.append(" values (").append(value).append(")");
+
+        BatchPreparedStatementSetter para = new BatchPreparedStatementSetter() {
+
+            @Override
+            public void setValues(PreparedStatement ps, int i) throws SQLException {
+                Map paramsMap = (Map) params.get(i);
+                for (int j = 1; j <= keys.size(); j++) {
+                    Object object = paramsMap.get(keys.get(j - 1));
+                    if (object == null) {
+                        ps.setNull(j, Types.CHAR);
+                    } else {
+                        if (object instanceof Integer) {
+                            ps.setInt(j, Integer.valueOf(object.toString()));
+                        } else if (object instanceof BigDecimal) {
+                            ps.setBigDecimal(j, new BigDecimal(object.toString()));
+                        } else if (object instanceof Short) {
+                            ps.setShort(j, new Short(object.toString()));
+                        } else if (object instanceof Boolean) {
+                            Boolean value = (Boolean) object;
+                            ps.setString(j, value.booleanValue() ? "Y" : "N");
+                        } else {
+                            ps.setString(j, object.toString());
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public int getBatchSize() {
+                return params.size();
+            }
+
+        };
+
+        getJdbcTemplate().batchUpdate(sql.toString(), para);
+    }
+
+
+/**
+     * 插入数据到数据库
+     * @param tableName
+     */
+	private boolean insertTableByMap(String tableName, Map<String,Object> params) {
+        StringBuffer key = new StringBuffer();
+        StringBuffer value = new StringBuffer();
+        Iterator<Entry<String, Object>> iter = params.entrySet().iterator();
+        while(iter.hasNext()) {
+            Entry<String, Object> element = iter.next();
+            key.append(element.getKey() + ",");
+            if(element.getValue() instanceof String){
+            	String keyValue = ((String)element.getValue()).trim();
+            	if( "~".equals(keyValue)){
+            		keyValue = null;
+            	}
+            	element.setValue(keyValue);
+            }
+            if(element.getValue() != null){
+            	if(element.getValue() instanceof java.sql.Date)
+                	value.append("to_date('" + element.getValue()+ "','yyyy-mm-dd'),");
+                else
+                	value.append("'" + element.getValue() + "',");
+            }else {//如果key对应的值为null，则不应加在null两端加单引号，否则sql语句是错误的
+            	value.append(element.getValue() + ",");
+            }
+        }
+        key.replace(key.length() - 1, key.length(), "");
+        value.replace(value.length() - 1, value.length(), "");
+
+        StringBuffer sql = new StringBuffer("insert into ");
+        sql.append(tableName);
+        sql.append("(").append(key).append(")");
+        sql.append(" values (").append(value).append(")");
+        
+        int count = getEasVoucherJdbcTemplate().update(sql.toString());
+        _logger.info("done count :" + count);
+        if(count < 1)
+        	return false;
+        return true;
+    }
