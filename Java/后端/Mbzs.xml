@@ -1,0 +1,119 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<!DOCTYPE mapper PUBLIC
+		"-//mybatis.org//DTD com.example.Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="winning.dao.MbzsDao">
+
+	<select id="getBZCD" parameterType="java.lang.String" resultType="java.util.Map">
+		SELECT JGDM, FLDM, FLMC, PFLDM, MBS, XH, HBZH, ISSJYS, ISIP, MZQX, ZYQX, FLLB, JYQX FROM BL_FLQX(NOLOCK) WHERE PFLDM='0'  AND JGDM=#{jgdm}
+		<if test="flmc!='' and flmc!=null">
+			AND FLMC LIKE #{flmc}
+		</if>
+		<if test="qx == 1">
+			AND	ZYQX=1
+		</if>
+		<if test="qx == 2">
+			AND MZQX=1
+		</if>
+		ORDER BY FLDM
+	</select>
+
+
+	<select id="getBzTreelList" parameterType="java.util.Map" resultType="java.util.Map">
+      SELECT ID,JGDM,MBID AS FLDM,MBMC AS MC,FLDM AS PFLDM,MBLX,MBFLDM,KSDM,KSMC,LX,MBLXS,MBLB FROM BL_MBLB(NOLOCK)
+       WHERE JGDM=#{JGDM} AND DEL=0 and LCZT='4'
+       UNION ALL
+      SELECT '0' AS ID,JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB FROM BL_FLQX(NOLOCK)
+       WHERE  JGDM=#{JGDM} AND FLDM IN (SELECT FLDM FROM BL_MBLB WHERE PFLDM=#{FLDM} GROUP BY FLDM)
+       UNION ALL
+      SELECT '0' AS ID,JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB FROM BL_FLQX(NOLOCK)
+      WHERE JGDM=#{JGDM} AND FLDM IN (SELECT PFLDM FROM BL_FLQX WHERE JGDM=#{JGDM} AND FLDM IN (SELECT FLDM FROM BL_MBLB WHERE PFLDM=#{FLDM} GROUP BY FLDM))
+	</select>
+
+	<select id="getBzmbList" parameterType="java.lang.String" resultType="java.util.Map">
+		SELECT MBID,MBMC,MBXX FROM BL_MBZD WHERE  JGDM=#{jgdm} AND  MBID LIKE #{mbid}
+	</select>
+
+	<select id="getBzMbxx" parameterType="java.lang.String" resultType="java.util.Map">
+       SELECT MBID,MBXX FROM BL_MBZD WHERE JGDM=#{jgdm} AND MBID=#{mbid}
+	</select>
+
+	<select id="getKSCD" parameterType="java.lang.String" resultType="java.util.Map">
+		select row_number() over(order by xmdm) as ROWNUM,FLDM,XMDM as KSDM,DMZ as KSMC,PYM,WBM from BL_ZDWH where fldm=4003
+		<if test="ksmc!='' and ksmc!=null">
+			AND DMZ LIKE #{ksmc}
+		</if>
+	</select>
+
+	<select id="getKsTreelList" parameterType="java.util.Map" resultType="java.util.Map">
+         select distinct 0 AS ID, SUBSTRING(zd.XMDM,0,3)+SUBSTRING(zd.XMDM,4,7) AS FLDM, LEFT(zd.XMDM,2) AS PFLDM, zd.DMZ as MC,'' AS JGDM
+         from BL_ZDWH zd where zd.fldm=4004 AND LEFT(zd.XMDM,2) =#{ksdm}
+         union all
+         select 0 AS ID, XMDM AS FLDM, '0' AS PFLDM, DMZ as MC ,'' AS JGDM from BL_ZDWH where fldm=4003 and XMDM =
+         (select XMDM from BL_ZDWH where fldm=4003 AND XMDM=#{ksdm} GROUP BY XMDM )
+	</select>
+
+	<select id="getKsTree" parameterType="java.util.Map" resultType="java.util.Map">
+	  SELECT '0' AS ID,'' AS JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB
+      FROM BL_FLZD(NOLOCK) WHERE FlDM IN (SELECT FLDM FROM BL_MBLB(NOLOCK) GROUP BY FLDM)
+        UNION ALL
+      SELECT '0' AS ID,'' AS JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB
+      FROM BL_FLZD(NOLOCK)  WHERE FlDM IN (SELECT PFLDM FROM BL_FLZD(NOLOCK) WHERE FlDM IN (SELECT FLDM FROM BL_MBLB(NOLOCK) GROUP BY FLDM) GROUP BY PFLDM)
+        UNION ALL
+      SELECT lb.ID,lb.JGDM,lb.JGDM + lb.MBID AS FLDM,lb.MBMC + '-' + (SELECT TOP(1) JGMC FROM UV_NEST_JGXX WHERE JGDM=lb.JGDM) AS MC,
+      lb.FLDM AS PFLDM,lb.MBLX,lb.MBFLDM,lb.KSDM,lb.KSMC,lb.LX,lb.MBLXS,lb.MBLB FROM BL_MBLB(NOLOCK) lb LEFT JOIN BL_KSDM ks
+        ON lb.JGDM=ks.JGDM AND lb.KSDM=ks.KSDM WHERE lb.DEL=0 AND ks.BZKSDM=#{ksdm} and LCZT='4' and lb.JGDM!='000'
+	</select>
+
+
+	<select id="getKsmbList" parameterType="java.lang.String" resultType="java.util.Map">
+	  SELECT lb.ID,lb.JGDM,lb.JGDM + lb.MBID AS MBID,lb.MBMC + '-' + (SELECT TOP(1) JGMC FROM UV_NEST_JGXX WHERE JGDM=lb.JGDM) AS MBMC,
+    zd.MBXX,lb.FLDM,lb.MBLX,lb.MBFLDM,lb.KSDM,lb.KSMC,lb.LX,lb.MBLXS,lb.MBLB FROM BL_MBLB(NOLOCK) lb LEFT JOIN BL_KSDM ks ON
+    lb.JGDM=ks.JGDM AND lb.KSDM=ks.KSDM LEFT JOIN BL_MBZD zd ON lb.JGDM = zd.JGDM AND lb.MBID = zd.MBID
+    WHERE lb.DEL=0 AND ks.BZKSDM=#{ksdm}
+	</select>
+
+
+	<select id="getMBCD" parameterType="java.lang.String" resultType="java.util.Map">
+		SELECT  JGDM, JGMC FROM UV_NEST_JGXX WHERE ORGTYPE=#{jglb} AND SJJGDM!='0'
+		<if test="jgmc!='' and jgmc!=null">
+			AND  JGMC LIKE #{jgmc}
+		</if>
+		GROUP BY JGDM,JGMC ORDER BY JGDM
+	</select>
+
+	<select id="getTotalMB" parameterType="java.lang.String" resultType="java.lang.Integer">
+		SELECT count(1) as ZS FROM BL_MBZD zd LEFT JOIN BL_MBLB lb ON lb.ID=zd.PID WHERE lb.LCZT='4' and  lb.JGDM=#{jgdm}
+	</select>
+
+	<select id="getMbsc" parameterType="java.util.Map" resultType="java.util.Map">
+		SELECT ID,JGDM,MBID AS FLDM,MBMC AS MC,FLDM AS PFLDM,MBLX,MBFLDM,KSDM,KSMC,LX,MBLXS,MBLB FROM BL_MBLB(NOLOCK)
+		WHERE JGDM=#{JGDM} AND DEL=0
+	</select>
+
+	<select id="getYYTreelList" parameterType="java.util.Map" resultType="java.util.Map">
+	  SELECT '0' AS ID,'' AS JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB
+      FROM BL_FLZD(NOLOCK) WHERE FlDM IN (SELECT FLDM FROM BL_MBLB(NOLOCK) GROUP BY FLDM)
+        UNION ALL
+      SELECT '0' AS ID,'' AS JGDM,FLDM,FLMC AS MC ,PFLDM,'' AS MBLX,'' AS MBFLDM,'' AS KSDM,'' AS KSMC,'' AS LX,'' AS MBLXS,'' AS MBLB
+      FROM BL_FLZD(NOLOCK)  WHERE FlDM IN (SELECT PFLDM FROM BL_FLZD(NOLOCK) WHERE FlDM IN (SELECT FLDM FROM BL_MBLB(NOLOCK) GROUP BY FLDM) GROUP BY PFLDM)
+        UNION ALL
+      SELECT ID,JGDM,MBID AS FLDM,MBMC AS MC,FLDM AS PFLDM,MBLX,MBFLDM,KSDM,KSMC,LX,MBLXS,MBLB FROM BL_MBLB(NOLOCK)
+       WHERE JGDM=#{jgdm} AND DEL=0 and LCZT='4'
+	</select>
+
+   <select id="getYymbList" parameterType="java.util.Map" resultType="java.util.Map">
+	 SELECT ID,JGDM,MBID,MBMC,MBBB,CJYDM,CJSJ,JLZT,MBXX,MRMB FROM BL_MBZD(NOLOCK) WHERE JGDM=#{jgdm}
+   </select>
+
+	<select id="getMbList" parameterType="java.util.Map" resultType="winning.bean.NemrMblb">
+		SELECT * FROM BL_MBLB WHERE JGDM = #{jgdm} AND MBID LIKE #{mbid} AND DEL=0 and LCZT='4'
+	</select>
+
+	<select id="getMbxxList" parameterType="java.util.Map" resultType="winning.bean.NemrMbxx">
+		SELECT zd.* FROM BL_MBZD zd INNER JOIN (SELECT ID FROM BL_MBLB WHERE JGDM = #{jgdm} AND MBID LIKE #{mbid} AND DEL=0 and LCZT='4') ids
+		on ids.ID = zd.PID
+	</select>
+
+
+</mapper>
